@@ -13,6 +13,7 @@ namespace SharpRUDP
 
         private static object _debugMutex = new object();
         public static RUDPLoggerLevel LogLevel = RUDPLoggerLevel.Info;
+        public static bool LogToFile = false;
 
         public static void Trace(string prefix, object obj, params object[] args)
         {
@@ -30,10 +31,16 @@ namespace SharpRUDP
         {
             lock (_debugMutex)
             {
+                string finalLine = string.Empty;
                 if (obj.GetType() == typeof(string))
-                    Console.WriteLine(string.Format("{0} {1}", prefix, string.Format((string)obj, args)));
+                    finalLine = string.Format("{0} {1}", prefix, string.Format((string)obj, args));
                 else
-                    Console.WriteLine(string.Format("{0} {1}", prefix, obj.ToString()));
+                    finalLine = string.Format("{0} {1}", prefix, obj.ToString());
+
+                if (!LogToFile)
+                    Console.WriteLine(finalLine);
+                else
+
             }
         }
     }

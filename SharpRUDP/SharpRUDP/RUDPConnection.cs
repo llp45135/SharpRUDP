@@ -1,4 +1,5 @@
-﻿using SharpRUDP.Serializers;
+﻿using NLog;
+using SharpRUDP.Serializers;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -79,6 +80,8 @@ namespace SharpRUDP
         private Thread _thKeepAlive;
         private RUDPSerializer _serializer;
         private AutoResetEvent SignalPacketRecv = new AutoResetEvent(false);
+        private static Logger _log;
+
         #endregion
 
         #region Initialization
@@ -106,15 +109,12 @@ namespace SharpRUDP
             if (!DebugEnabled)
                 return;
             lock (_debugMutex)
-            {
-                Console.ForegroundColor = IsServer ? ConsoleColor.Cyan : ConsoleColor.Green;
-                RUDPLogger.Info(IsServer ? "[S]" : "[C]", obj, args);
-                Console.ResetColor();
-            }
+                _log.Debug((IsServer ? "[S] " : "[C] ") + obj.ToString(), args);
         }
 
         public void Connect(string address, int port)
         {
+            _log = LogManager.GetLogger("SharpRUDP.Client");
             Port = port;
             Address = address;
             IsServer = false;
@@ -126,6 +126,7 @@ namespace SharpRUDP
 
         public void Listen(string address, int port)
         {
+            _log = LogManager.GetLogger("SharpRUDP.Server");
             Port = port;
             Address = address;
             IsServer = true;
@@ -155,7 +156,7 @@ namespace SharpRUDP
                 {
                     ProcessRecvQueue();
                     SignalPacketRecv.WaitOne(RecvWaitMs);
-                    Thread.Sleep(1);
+                    Thread.Sleep(10);
                 }
             });
             _thKeepAlive = new Thread(() =>
@@ -273,11 +274,17 @@ namespace SharpRUDP
             RUDPConnectionData cn = GetConnection(destination);
             if ((data != null && data.Length < _maxMTU) || data == null)
             {
+                int id = 0;
+                lock(_connectionsMutex)
+                {
+                    id = cn.PacketId;
+                    cn.PacketId++;
+                }                    
                 packet = new RUDPPacket()
                 {
                     Serializer = _serializer,
                     Dst = destination,
-                    Id = cn.PacketId,
+                    Id = id,
                     Type = type,
                     Flags = flags,
                     Data = data,
@@ -285,13 +292,18 @@ namespace SharpRUDP
                     OnPacketReceivedByDestination = OnPacketReceivedByDestination
                 };
                 SendPacket(packet);
-                cn.PacketId++;
                 if (!IsServer && cn.Local > SequenceLimit)
                     reset = true;
             }
             else if (data != null && data.Length >= _maxMTU)
             {
                 int i = 0;
+                int id = 0;
+                lock (_connectionsMutex)
+                {
+                    id = cn.PacketId;
+                    cn.PacketId++;
+                }
                 List<RUDPPacket> PacketsToSend = new List<RUDPPacket>();
                 while (i < data.Length)
                 {
@@ -304,7 +316,7 @@ namespace SharpRUDP
                     {
                         Serializer = _serializer,
                         Dst = destination,
-                        Id = cn.PacketId,
+                        Id = id,
                         Type = type,
                         Flags = flags,
                         Data = buf,
@@ -318,16 +330,15 @@ namespace SharpRUDP
                     p.OnPacketReceivedByDestination = OnPacketReceivedByDestination;
                     SendPacket(p);
                 }
-                lock(_connectionsMutex)
-                    cn.PacketId++;
                 if (!IsServer && cn.Local > SequenceLimit)
                     reset = true;
                 packet = PacketsToSend.First();
             }
             else
                 throw new Exception("This should not happen");
-            if (cn.PacketId > PacketIdLimit)
-                cn.PacketId = 0;
+            lock(_connectionsMutex)
+                if (cn.PacketId > PacketIdLimit)
+                    cn.PacketId = 0;
             if (reset)
             {
                 SendPacket(new RUDPPacket()
@@ -431,22 +442,26 @@ namespace SharpRUDP
                 PacketsToRecv = PacketsToRecv.GroupBy(x => x.Seq).Select(g => g.First()).ToList();
                 foreach (RUDPPacket p in PacketsToRecv)
                 {
-                    lock (cn.ReceivedPackets)
-                        cn.ReceivedPackets.Remove(p);
+                    lock (_connectionsMutex)
+                        lock (cn.ReceivedPackets)
+                            cn.ReceivedPackets.Remove(p);
 
                     if (p.Processed)
                         continue;
 
-                    if (p.Seq < cn.Remote)
+                    lock (_connectionsMutex)
                     {
-                        cn.ReceivedPackets.Add(p);
-                        continue;
-                    }
+                        if (p.Seq < cn.Remote)
+                        {
+                            cn.ReceivedPackets.Add(p);
+                            continue;
+                        }
 
-                    if (p.Seq > cn.Remote)
-                    {
-                        cn.ReceivedPackets.Add(p);
-                        break;
+                        if (p.Seq > cn.Remote)
+                        {
+                            cn.ReceivedPackets.Add(p);
+                            break;
+                        }
                     }
 
                     Debug("RECV <- {0}: {1}", p.Src, p);
@@ -454,19 +469,10 @@ namespace SharpRUDP
                     if(p.Type != RUDPPacketType.ACK)
                         IdsToConfirm.Add(p.Id);
 
-                    List<RUDPPacket> confirmedPackets = new List<RUDPPacket>();
-                    lock (cn.Unconfirmed)
-                    {
-                        confirmedPackets.AddRange(cn.Unconfirmed.Where(x => p.intData.Contains(x.Id)).OrderBy(x => x.Id));
-                        cn.Unconfirmed.RemoveAll(x => confirmedPackets.Select(y => y.Seq).Contains(x.Seq));
-                    }
-                    confirmedPackets = confirmedPackets.GroupBy(x => x.Id).Select(g => g.First()).ToList();
-                    foreach (RUDPPacket confirmedPacket in confirmedPackets)
-                        confirmedPacket.OnPacketReceivedByDestination?.Invoke(confirmedPacket);
-
                     if (p.Qty == 0)
                     {
-                        cn.Remote++;
+                        lock (_connectionsMutex)
+                            cn.Remote++;
                         p.Processed = true;
 
                         if (p.Type == RUDPPacketType.SYN)
@@ -486,9 +492,12 @@ namespace SharpRUDP
 
                         if (p.Type == RUDPPacketType.RST)
                         {
-                            cn.Remote = IsServer ? ClientStartSequence : ServerStartSequence;
+                            lock (_connectionsMutex)
+                                cn.Remote = IsServer ? ClientStartSequence : ServerStartSequence;
                             break;
                         }
+
+                        ConfirmPackets(cn, p.intData);
 
                         if (p.Type == RUDPPacketType.DAT)
                             OnPacketReceived?.Invoke(p);
@@ -510,9 +519,14 @@ namespace SharpRUDP
                                     Debug("RECV MP <- {0}: {1}", p.Src, mp);
                                 }
                             buf = ms.ToArray();
-                            Debug("MULTIPACKET ID {0} DATA: {1}", p.Id, Encoding.ASCII.GetString(buf));
+                            // Debug("MULTIPACKET ID {0} DATA: {1}", p.Id, Encoding.ASCII.GetString(buf));
 
                             IdsToConfirm.Add(p.Id);
+
+                            List<int> intdata = new List<int>();
+                            multiPackets.ForEach((x) => { intdata.AddRange(x.intData); });
+                            ConfirmPackets(cn, intdata.ToArray());
+
                             OnPacketReceived?.Invoke(new RUDPPacket()
                             {
                                 Serializer = _serializer,
@@ -529,11 +543,13 @@ namespace SharpRUDP
                                 Type = p.Type
                             });
 
-                            cn.Remote += p.Qty;
+                            lock (_connectionsMutex)
+                                cn.Remote += p.Qty;
                         }
                         else if (multiPackets.Count < p.Qty)
                         {
-                            cn.ReceivedPackets.Add(p);
+                            lock (_connectionsMutex)
+                                cn.ReceivedPackets.Add(p);
                             break;
                         }
                         else
@@ -547,6 +563,22 @@ namespace SharpRUDP
                     Send(cn.EndPoint, RUDPPacketType.ACK, RUDPPacketFlags.NUL, null, IdsToConfirm.ToArray());
             }
         }
+
+        private void ConfirmPackets(RUDPConnectionData cn, int[] intData)
+        {
+            List<RUDPPacket> confirmedPackets = new List<RUDPPacket>();
+            lock (cn.Unconfirmed)
+            {
+                confirmedPackets.AddRange(cn.Unconfirmed.Where(x => intData.Contains(x.Id)).OrderBy(x => x.Id));
+                cn.Unconfirmed.RemoveAll(x => confirmedPackets.Select(y => y.Seq).Contains(x.Seq));
+            }
+            confirmedPackets = confirmedPackets.GroupBy(x => x.Id).Select(g => g.First()).ToList();
+            foreach (RUDPPacket confirmedPacket in confirmedPackets)
+            {
+                Debug("Confirming packet {0}", confirmedPacket.Id);
+                confirmedPacket.OnPacketReceivedByDestination?.Invoke(confirmedPacket);
+            }
+        }
         #endregion
 
         #region Misc functions
@@ -557,12 +589,18 @@ namespace SharpRUDP
             foreach(var kvp in Connections)
             {
                 Debug("=== {0} ===", kvp.Key);
-                Debug("  {0} pending", kvp.Value.Pending.Count);
-                foreach (RUDPPacket p in kvp.Value.Pending)
-                    Debug("    {0}", p);
-                Debug("  {0} unconfirmed", kvp.Value.Unconfirmed.Count);
-                foreach (RUDPPacket p in kvp.Value.Unconfirmed)
-                    Debug("    {0}", p);
+                lock (kvp.Value.Pending)
+                {
+                    Debug("  {0} pending", kvp.Value.Pending.Count);
+                    foreach (RUDPPacket p in kvp.Value.Pending)
+                        Debug("    {0}", p);
+                }
+                lock(kvp.Value.Unconfirmed)
+                {
+                    Debug("  {0} unconfirmed", kvp.Value.Unconfirmed.Count);
+                    foreach (RUDPPacket p in kvp.Value.Unconfirmed)
+                        Debug("    {0}", p);
+                }
             }
             Debug("======================================================");
         }

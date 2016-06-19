@@ -40,6 +40,10 @@
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
+      <HintPath>..\..\..\packages\NLog.4.3.5\lib\net40\NLog.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Web.Extensions" />
@@ -54,7 +58,6 @@
     <Compile Include="RUDPConnectionState.cs" />
     <Compile Include="RUDPConnection.cs" />
     <Compile Include="RUDPInternalPackets.cs" />
-    <Compile Include="RUDPLogger.cs" />
     <Compile Include="RUDPPacket.cs" />
     <Compile Include="RUDPPacketFlags.cs" />
     <Compile Include="RUDPPacketType.cs" />
@@ -64,6 +67,15 @@
     <Compile Include="Serializers\RUDPJSONSerializer.cs" />
     <Compile Include="Serializers\RUDPSerializeMode.cs" />
     <Compile Include="Serializers\RUDPSerializer.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="NLog.config">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <None Include="NLog.xsd">
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

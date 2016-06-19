@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -7,16 +8,18 @@ namespace SharpRUDP
 {
     public class RUDPSocket : IDisposable
     {
+        public IPEndPoint LocalEndPoint;
+        public IPEndPoint RemoteEndPoint;
+
         internal Socket _socket;
+
+        private int _port;
+        private string _address;
         private const int bufSize = 64 * 1024;
         private StateObject state = new StateObject();
         private EndPoint ep = new IPEndPoint(IPAddress.Any, 0);
         private AsyncCallback recv = null;
-        public IPEndPoint LocalEndPoint;
-        public IPEndPoint RemoteEndPoint;
-
-        private int _port;
-        private string _address;
+        private static Logger _log = LogManager.GetLogger("SharpRUDP.Socket");
 
         public class StateObject
         {
@@ -115,13 +118,13 @@ namespace SharpRUDP
 
         public virtual int PacketSending(IPEndPoint endPoint, byte[] data, int length)
         {
-            RUDPLogger.Trace("SEND -> {0}: {1}", endPoint, Encoding.ASCII.GetString(data, 0, length));
+            _log.Trace("SEND -> {0}: {1}", endPoint, Encoding.ASCII.GetString(data, 0, length));
             return -1;
         }
 
         public virtual void PacketReceive(IPEndPoint ep, byte[] data, int length)
         {
-            RUDPLogger.Trace("RECV <- {0}: {1}", ep, Encoding.ASCII.GetString(data, 0, length));
+            _log.Trace("RECV <- {0}: {1}", ep, Encoding.ASCII.GetString(data, 0, length));
         }
 
         protected virtual void Dispose(bool value)
