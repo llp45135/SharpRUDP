@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{AB4212CE-1B6A-40F8-AA43-5BC3A836570C}</ProjectGuid>
+    <ProjectGuid>{65CCEF8D-4F60-49B9-81D4-2A71570F1A20}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>SharpRUDP</RootNamespace>

@@ -188,7 +188,10 @@ namespace SharpRUDP
 
                     if (!Connection.IsServer)
                         if (p.Type == RUDPPacketType.ACK)
+                        {
                             Connection.State = ConnectionState.OPEN;
+                            Connection.CallConnected(EndPoint);
+                        }
 
                     Connection.CallPacketReceived(p);
 
@@ -261,6 +264,7 @@ namespace SharpRUDP
             {
                 p = Connection.Serializer.Deserialize(Connection.LevelTwoHeader, data);
                 p.Serializer = Connection.Serializer;
+                p.Src = EndPoint;
                 lock (_recvMutex)
                     RecvQueue.Add(p);
                 ip = new RUDPInternalPacket() { Type = RUDPInternalPacket.RUDPInternalPacketType.ACK, Data = p.Sequence };

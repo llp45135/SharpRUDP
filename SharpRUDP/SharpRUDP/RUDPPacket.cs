@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Text;
 
 namespace SharpRUDP
@@ -17,6 +18,7 @@ namespace SharpRUDP
         public RUDPPacketType Type { get; set; }
         public byte[] Data { get; internal set; }
 
+        public IPEndPoint Src { get; set; }
         public bool Processed { get; set; }
 
         public override string ToString()

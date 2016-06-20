@@ -16,17 +16,22 @@ namespace SharpRUDP
         public byte[] LevelOneHeader { get; set; }
         public byte[] LevelTwoHeader { get; set; }
 
+        public int Port { get; set; }
+        public string Address { get; set; }
         public RUDPSerializer Serializer { get; set; }
         public ConnectionState State { get; set; }
 
         public delegate void dlgSocketError(IPEndPoint ep, Exception ex);
+        public delegate void dlgEventConnect(IPEndPoint ep);
         public delegate void dlgEventPacket(RUDPPacket p);
         public event dlgEventPacket OnPacketReceived;
+        public event dlgEventConnect OnConnected;
         public event dlgSocketError OnSocketError;
 
         private static Logger Log = LogManager.GetCurrentClassLogger();
         private RUDPSocket _socket = new RUDPSocket();
         private IPEndPoint RemoteEndPoint;
+        private object _epMutex = new object();
         internal Dictionary<string, RUDPEndpoint> _endpoints = new Dictionary<string, RUDPEndpoint>();
 
         private void Debug(string text, params object[] args)
@@ -52,6 +57,8 @@ namespace SharpRUDP
 
         public void Listen(string address, int port)
         {
+            Port = port;
+            Address = address;
             IsAlive = true;
             IsServer = true;
             _socket.Server(address, port);
@@ -60,6 +67,8 @@ namespace SharpRUDP
 
         public void Connect(string address, int port)
         {
+            Port = port;
+            Address = address;
             IsAlive = true;
             IsServer = false;
             State = ConnectionState.OPENING;
@@ -72,14 +81,17 @@ namespace SharpRUDP
         private RUDPEndpoint GetEndpoint(IPEndPoint remoteEndPoint)
         {
             string ep = remoteEndPoint.ToString();
-            if (!_endpoints.ContainsKey(ep))
+            lock (_epMutex)
             {
-                _endpoints[ep] = new RUDPEndpoint()
+                if (!_endpoints.ContainsKey(ep))
                 {
-                    Connection = this,
-                    EndPoint = remoteEndPoint
-                };
-                _endpoints[ep].Init();
+                    _endpoints[ep] = new RUDPEndpoint()
+                    {
+                        Connection = this,
+                        EndPoint = remoteEndPoint
+                    };
+                    _endpoints[ep].Init();
+                }
             }
             return _endpoints[ep];
         }
@@ -97,13 +109,23 @@ namespace SharpRUDP
 
         public void Send(byte[] data)
         {
-            RUDPEndpoint rep = GetEndpoint(RemoteEndPoint);
+            Send(RemoteEndPoint, data);
+        }
+
+        public void Send(IPEndPoint ep, byte[] data)
+        {
+            RUDPEndpoint rep = GetEndpoint(ep);
             rep.Send(data);
         }
 
         public void CallPacketReceived(RUDPPacket p)
         {
             OnPacketReceived?.Invoke(p);
+        }
+
+        public void CallConnected(IPEndPoint ep)
+        {
+            OnConnected?.Invoke(ep);
         }
 
         public void Disconnect()
