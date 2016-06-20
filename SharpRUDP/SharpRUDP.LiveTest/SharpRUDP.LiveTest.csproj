@@ -4,15 +4,13 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{C1A5A429-FA58-4727-97EB-6257617F057E}</ProjectGuid>
+    <ProjectGuid>{78EE57C8-CB47-44E3-A47E-374A52199889}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>SharpRUDP.LiveTest</RootNamespace>
     <AssemblyName>SharpRUDP.LiveTest</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -47,12 +45,13 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="App.config" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\SharpRUDP.Test\SharpRUDP.Test.csproj">
       <Project>{067456c0-086c-46a8-b37f-1405717b7bfc}</Project>
       <Name>SharpRUDP.Test</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\SharpRUDP\SharpRUDP.csproj">
+      <Project>{ab4212ce-1b6a-40f8-aa43-5bc3a836570c}</Project>
+      <Name>SharpRUDP</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

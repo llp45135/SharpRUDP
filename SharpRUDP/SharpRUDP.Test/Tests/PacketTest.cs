@@ -49,13 +49,12 @@ namespace SharpRUDP.Test
             counter = 0;
             finished = false;
             for (int i = 0; i < _packetMax; i++)
-                c.Send(buf, (RUDPPacket p) => { Console.WriteLine("Packet {0} confirmed", p.Id); });
+                c.Send(buf);
 
             while (!finished)
                 Thread.Sleep(10);
 
-            c.Status();
-            s.Status();
+            // c.Status(); s.Status();
 
             s.Disconnect();
             c.Disconnect();

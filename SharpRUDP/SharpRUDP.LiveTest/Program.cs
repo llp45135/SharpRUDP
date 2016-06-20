@@ -10,7 +10,7 @@ namespace SharpRUDP.LiveTest
         static void Wait()
         {
             // Console.ReadLine();
-            Thread.Sleep(5000);
+            // Thread.Sleep(5000);
         }
 
         static void RunAllTests()
@@ -23,18 +23,19 @@ namespace SharpRUDP.LiveTest
                 test.Run();
                 sw.Stop();
                 Console.WriteLine("=================================== TEST FINISH: {0} - {1}", test.TestName, sw.Elapsed);
+                Wait();
             }
         }
 
         static void Main(string[] args)
         {
-            //RunAllTests();
+            RunAllTests();
             //new ClientDisconnectionTest().Run(); Wait();
             //new ServerDisconnectionTest().Run(); Wait();
             //new PacketTest(100, 1).Run(); Wait();
             //new KeepAliveTest(true).Run(); Wait();
             //new KeepAliveTest(false).Run(); Wait();
-            new PacketTest(100, 32) { TestName = "32 Kbytes" }.Run();
+            //new PacketTest(100, 4, 1) { TestName = "32 Kbytes" }.Run();
             Wait();
             Console.WriteLine("Finished");
             Console.ReadKey();

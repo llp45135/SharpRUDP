@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -7,26 +8,34 @@ namespace SharpRUDP
 {
     public class RUDPSocket : IDisposable
     {
+        public IPEndPoint LocalEndPoint;
+        public IPEndPoint RemoteEndPoint;
+
+        public delegate void dlgReceive(IPEndPoint ep, byte[] data, int length);
+        public delegate void dlgSocketError(IPEndPoint ep, Exception ex);
+        public event dlgReceive OnDataReceived;
+        public event dlgSocketError OnSocketError;
+
+        private int _port;
+        private string _address;
         internal Socket _socket;
         private const int bufSize = 64 * 1024;
         private StateObject state = new StateObject();
         private EndPoint ep = new IPEndPoint(IPAddress.Any, 0);
         private AsyncCallback recv = null;
-        public IPEndPoint LocalEndPoint;
-        public IPEndPoint RemoteEndPoint;
-
-        private int _port;
-        private string _address;
+        private static Logger Log = LogManager.GetCurrentClassLogger();
+        private bool _isServer;
 
         public class StateObject
         {
             public byte[] buffer = new byte[bufSize];
         }
 
-        protected void Server(string address, int port)
+        public void Server(string address, int port)
         {
             _port = port;
             _address = address;
+            _isServer = true;
             LocalEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             _socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.ReuseAddress, true);
@@ -34,10 +43,11 @@ namespace SharpRUDP
             Receive();
         }
 
-        protected void Client(string address, int port)
+        public void Client(string address, int port)
         {
             _port = port;
             _address = address;
+            _isServer = false;
             bool connect = false;
             IPAddress ipAddress;
             if (IPAddress.TryParse(address, out ipAddress))
@@ -67,7 +77,7 @@ namespace SharpRUDP
             Receive();
         }
 
-        internal void SendBytes(IPEndPoint endPoint, byte[] data)
+        public void SendBytes(IPEndPoint endPoint, byte[] data)
         {
             PacketSending(endPoint, data, data.Length);
             try
@@ -111,17 +121,21 @@ namespace SharpRUDP
             }, state);
         }
 
-        public virtual void SocketError(IPEndPoint ep, Exception ex) { }
+        public void SocketError(IPEndPoint ep, Exception ex)
+        {
+            OnSocketError?.Invoke(ep, ex);
+        }
 
         public virtual int PacketSending(IPEndPoint endPoint, byte[] data, int length)
         {
-            RUDPLogger.Trace("SEND -> {0}: {1}", endPoint, Encoding.ASCII.GetString(data, 0, length));
+            Log.Trace("SEND -> {0}: {1}", endPoint, Encoding.ASCII.GetString(data, 0, length));
             return -1;
         }
 
-        public virtual void PacketReceive(IPEndPoint ep, byte[] data, int length)
+        public void PacketReceive(IPEndPoint ep, byte[] data, int length)
         {
-            RUDPLogger.Trace("RECV <- {0}: {1}", ep, Encoding.ASCII.GetString(data, 0, length));
+            Log.Trace("RECV <- {0}: {1}", ep, Encoding.ASCII.GetString(data, 0, length));
+            OnDataReceived?.Invoke(ep, data, length);
         }
 
         protected virtual void Dispose(bool value)
@@ -131,6 +145,9 @@ namespace SharpRUDP
 
         public void Dispose()
         {
+            _socket.Shutdown(SocketShutdown.Both);
+            if (_isServer)
+                _socket.Close();
             Dispose(true);
             GC.SuppressFinalize(this);
         }
